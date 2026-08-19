@@ -189,6 +189,15 @@
     pointer-events:none;
     opacity:0;
     transition: opacity .15s ease;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:2px;
+  }
+  .hotspot-label .hint-line{
+    font-size: 8.5px;
+    color: var(--gold);
+    letter-spacing: 0.06em;
   }
   .hotspot:hover .hotspot-label{ opacity: 1; }
 
@@ -446,6 +455,7 @@
     </div>
   </div>
   <div id="controls-top">
+    <button class="pill-btn active" id="btn-section" data-ar="مقطع عرضي" data-en="Cross-section">مقطع عرضي</button>
     <button class="pill-btn" id="btn-reset" data-ar="إعادة الزاوية" data-en="Reset view">إعادة الزاوية</button>
     <button class="pill-btn" id="btn-lang">EN</button>
   </div>
@@ -990,6 +1000,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.localClippingEnabled = true;
 stage.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -1032,13 +1043,31 @@ const heartGroup = new THREE.Group();
 scene.add(heartGroup);
 
 const muscleMat = new THREE.MeshPhysicalMaterial({
-  color: 0x9c2a24,
-  roughness: 0.42,
-  clearcoat: 0.55,
-  clearcoatRoughness: 0.35,
+  color: 0xb43a22,
+  roughness: 0.32,
+  clearcoat: 0.75,
+  clearcoatRoughness: 0.22,
   sheen: 1.0,
-  sheenColor: new THREE.Color(0xd6534a),
-  metalness: 0.05
+  sheenColor: new THREE.Color(0xe8875c),
+  metalness: 0.04,
+  side: THREE.DoubleSide
+});
+const cavityMat = new THREE.MeshPhysicalMaterial({
+  color: 0xd4614a,
+  roughness: 0.28,
+  clearcoat: 0.85,
+  clearcoatRoughness: 0.15,
+  sheen: 0.8,
+  sheenColor: new THREE.Color(0xf0a37a),
+  metalness: 0.03,
+  side: THREE.DoubleSide
+});
+const valveMat = new THREE.MeshPhysicalMaterial({
+  color: 0xede0c8,
+  roughness: 0.4,
+  clearcoat: 0.6,
+  metalness: 0.02,
+  side: THREE.DoubleSide
 });
 const veinMat = new THREE.MeshPhysicalMaterial({
   color: 0x2c5a68,
@@ -1047,12 +1076,22 @@ const veinMat = new THREE.MeshPhysicalMaterial({
   metalness: 0.05
 });
 const arteryMat = new THREE.MeshPhysicalMaterial({
-  color: 0xb3453f,
-  roughness: 0.38,
-  clearcoat: 0.6,
+  color: 0xc65a45,
+  roughness: 0.3,
+  clearcoat: 0.7,
   metalness: 0.05
 });
 const goldAccent = new THREE.MeshStandardMaterial({ color:0xc9a24b, roughness:0.35, metalness:0.6 });
+
+// Cutaway clipping plane — cuts a wedge from the front-right to reveal
+// interior chambers, similar to a dissected anatomical model.
+const cutPlane = new THREE.Plane(new THREE.Vector3(0.62, 0.05, 0.78), 0.05);
+let sectionMode = true;
+function applyClipping(){
+  const planes = sectionMode ? [cutPlane] : [];
+  muscleMat.clippingPlanes = planes;
+}
+applyClipping();
 
 // Main ventricular mass — lathe profile approximating heart silhouette (apex at bottom)
 function makeHeartLathe(){
@@ -1072,7 +1111,7 @@ function makeHeartLathe(){
     [0.15, 1.25]
   ];
   profile.forEach(p => pts.push(new THREE.Vector2(p[0], p[1])));
-  const geo = new THREE.LatheGeometry(pts, 64);
+  const geo = new THREE.LatheGeometry(pts, 96);
   geo.computeVertexNormals();
   return geo;
 }
@@ -1091,7 +1130,7 @@ groove.rotation.set(Math.PI/2.3, 0.3, 0.5);
 heartGroup.add(groove);
 
 // Left atrium bulge (posterior-superior-left)
-const laGeo = new THREE.SphereGeometry(0.62, 32, 32);
+const laGeo = new THREE.SphereGeometry(0.62, 48, 48);
 const laMesh = new THREE.Mesh(laGeo, muscleMat);
 laMesh.position.set(-0.35, 0.95, -0.65);
 laMesh.scale.set(1.0, 0.85, 0.95);
@@ -1099,12 +1138,46 @@ laMesh.castShadow = true;
 heartGroup.add(laMesh);
 
 // Right atrium bulge (anterior-superior-right)
-const raGeo = new THREE.SphereGeometry(0.68, 32, 32);
+const raGeo = new THREE.SphereGeometry(0.68, 48, 48);
 const raMesh = new THREE.Mesh(raGeo, muscleMat);
 raMesh.position.set(0.85, 0.65, 0.4);
 raMesh.scale.set(1.05, 0.9, 1.0);
 raMesh.castShadow = true;
 heartGroup.add(raMesh);
+
+// ---- Interior chamber cavities (visible through the cutaway wedge) ----
+// These are never clipped, so they read as the "inside" of the heart
+// wherever the outer myocardium has been cut away.
+const cavityGroup = new THREE.Group();
+heartGroup.add(cavityGroup);
+function addCavity(pos, radius, scale){
+  const geo = new THREE.SphereGeometry(radius, 40, 40);
+  const mesh = new THREE.Mesh(geo, cavityMat);
+  mesh.position.set(pos[0], pos[1], pos[2]);
+  if(scale) mesh.scale.set(scale[0], scale[1], scale[2]);
+  cavityGroup.add(mesh);
+  return mesh;
+}
+addCavity([0.85, 0.55, 0.5], 0.46, [1.1, 0.95, 1.0]);   // right atrium cavity
+addCavity([0.55, -0.55, 0.65], 0.5, [0.9, 1.15, 0.85]);  // right ventricle cavity
+addCavity([-0.35, 0.85, -0.6], 0.4, [1.0, 0.85, 0.95]);  // left atrium cavity
+addCavity([-0.4, -0.45, 0.15], 0.56, [0.85, 1.2, 0.85]); // left ventricle cavity
+
+// ---- Valve leaflets — small cream discs at each valve location ----
+const valveGroup = new THREE.Group();
+heartGroup.add(valveGroup);
+function addValve(pos, radius, rotation){
+  const geo = new THREE.CircleGeometry(radius, 24, 0, Math.PI * 1.5);
+  const mesh = new THREE.Mesh(geo, valveMat);
+  mesh.position.set(pos[0], pos[1], pos[2]);
+  if(rotation) mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
+  valveGroup.add(mesh);
+  return mesh;
+}
+addValve([-0.25, 0.15, 0.05], 0.24, [Math.PI/2.4, 0.3, 0]);   // mitral
+addValve([0.55, 0.15, 0.35], 0.26, [Math.PI/2.2, -0.2, 0.4]); // tricuspid
+addValve([0.05, 0.95, 0.05], 0.16, [0.3, 0, 0]);              // aortic
+addValve([0.15, 1.15, -0.35], 0.15, [0.4, 0.5, 0]);           // pulmonary
 
 // Aorta (arching tube, rightward-up from base then curving left)
 function makeTube(pointsArr, radius, mat, segments=40, radial=16){
@@ -1185,7 +1258,7 @@ MARKERS.forEach(m => {
   el.className = 'hotspot';
   el.setAttribute('aria-label', HEART_DATA[m.id].title_ar);
   el.dataset.id = m.id;
-  el.innerHTML = `<span class="ring"></span><span class="core"></span><span class="hotspot-label">${HEART_DATA[m.id].title_ar}</span>`;
+  el.innerHTML = `<span class="ring"></span><span class="core"></span><span class="hotspot-label">${HEART_DATA[m.id].title_ar}<span class="hint-line" data-ar="اضغط للتفاصيل الكاملة" data-en="Tap for full details">اضغط للتفاصيل الكاملة</span></span>`;
   el.addEventListener('click', () => openPanel(m.id));
   hotspotLayer.appendChild(el);
   hotspotEls[m.id] = el;
@@ -1290,7 +1363,8 @@ function applyLang(lang){
   });
   Object.entries(HEART_DATA).forEach(([id, d]) => {
     const labelEl = hotspotEls[id].querySelector('.hotspot-label');
-    labelEl.textContent = lang === 'ar' ? d.title_ar : d.title_en;
+    const hintText = lang === 'ar' ? 'اضغط للتفاصيل الكاملة' : 'Tap for full details';
+    labelEl.innerHTML = `${lang === 'ar' ? d.title_ar : d.title_en}<span class="hint-line">${hintText}</span>`;
     hotspotEls[id].setAttribute('aria-label', lang === 'ar' ? d.title_ar : d.title_en);
   });
   if(activeId) renderPanel(activeId);
@@ -1304,6 +1378,14 @@ document.getElementById('btn-reset').addEventListener('click', () => {
   controls.autoRotate = true;
 });
 controls.addEventListener('start', () => { controls.autoRotate = false; });
+
+/* ---------- Cross-section toggle ---------- */
+const btnSection = document.getElementById('btn-section');
+btnSection.addEventListener('click', () => {
+  sectionMode = !sectionMode;
+  applyClipping();
+  btnSection.classList.toggle('active', sectionMode);
+});
 
 /* =========================================================
    RESIZE + RENDER LOOP
