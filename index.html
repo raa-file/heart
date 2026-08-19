@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>أطلس القلب التفاعلي | Interactive Heart Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0b1220;
+    --bg-deep: #070c16;
+    --panel: #101a2c;
+    --panel-edge: #1c2a44;
+    --ivory: #ede6da;
+    --ivory-dim: #a9a294;
+    --muscle: #b3231c;
+    --muscle-bright: #d63a2e;
+    --gold: #c9a24b;
+    --gold-dim: #8a723a;
+    --teal: #2c6e7f;
+    --teal-bright: #3f95a8;
+    --line: rgba(237,230,218,0.12);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    height:100%;
+    background: var(--bg);
+    color: var(--ivory);
+    font-family: 'IBM Plex Sans Arabic','IBM Plex Sans',sans-serif;
+    overflow:hidden;
+  }
+  body[dir="ltr"]{ font-family:'IBM Plex Sans','IBM Plex Sans Arabic',sans-serif; }
+
+  ::selection{ background: var(--muscle); color: var(--ivory); }
+
+  /* ---------- Top bar ---------- */
+  #topbar{
+    position:fixed; top:0; left:0; right:0; z-index:50;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 18px 28px;
+    background: linear-gradient(to bottom, rgba(7,12,22,0.95), rgba(7,12,22,0));
+    pointer-events:none;
+  }
+  #topbar > *{ pointer-events:auto; }
+  .brand{
+    display:flex; align-items:center; gap:12px;
+  }
+  .brand .mark{
+    width:34px; height:34px; position:relative;
+  }
+  .brand .mark svg{ width:100%; height:100%; }
+  .brand h1{
+    font-family:'Newsreader', serif;
+    font-weight:600;
+    font-size: 19px;
+    letter-spacing: 0.01em;
+    line-height:1.1;
+  }
+  .brand .sub{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    margin-top: 2px;
+  }
+
+  #controls-top{ display:flex; align-items:center; gap: 10px; }
+  .pill-btn{
+    background: rgba(16,26,44,0.85);
+    border: 1px solid var(--panel-edge);
+    color: var(--ivory);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 9px 16px;
+    border-radius: 999px;
+    cursor:pointer;
+    backdrop-filter: blur(6px);
+    transition: border-color .2s ease, background .2s ease;
+    display:flex; align-items:center; gap:8px;
+  }
+  .pill-btn:hover{ border-color: var(--gold-dim); background: rgba(28,42,68,0.9); }
+  .pill-btn:focus-visible{ outline: 2px solid var(--gold); outline-offset: 2px; }
+  .pill-btn.active{ border-color: var(--gold); color: var(--gold); }
+
+  /* ---------- Canvas stage ---------- */
+  #stage{
+    position:fixed; inset:0;
+  }
+  #stage canvas{ display:block; touch-action:none; }
+
+  #stage-caption{
+    position:fixed;
+    bottom: 26px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align:center;
+    pointer-events:none;
+    z-index: 20;
+  }
+  #stage-caption .hint{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ivory-dim);
+    opacity: 0.75;
+  }
+
+  /* ---------- ECG ambient line ---------- */
+  #ecg-wrap{
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 46px;
+    z-index: 15;
+    pointer-events: none;
+    opacity: 0.55;
+    mix-blend-mode: screen;
+  }
+  #ecg-wrap svg{ width: 200%; height:100%; }
+  #ecg-path{
+    fill:none;
+    stroke: var(--muscle-bright);
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 4px rgba(214,58,46,0.6));
+  }
+  #ecg-line{
+    animation: ecgScroll 6s linear infinite;
+  }
+  @keyframes ecgScroll{
+    from{ transform: translateX(0); }
+    to{ transform: translateX(-50%); }
+  }
+
+  /* ---------- Hotspots ---------- */
+  .hotspot{
+    position:absolute;
+    width: 26px; height:26px;
+    margin-left:-13px; margin-top:-13px;
+    border-radius:50%;
+    cursor:pointer;
+    z-index: 30;
+    display:flex; align-items:center; justify-content:center;
+    transition: transform .15s ease;
+  }
+  .hotspot .ring{
+    position:absolute; inset:0;
+    border-radius:50%;
+    border: 1.5px solid var(--gold);
+    animation: hotspotPulse 1.15s cubic-bezier(.4,0,.5,1) infinite;
+  }
+  .hotspot .core{
+    width:9px; height:9px;
+    border-radius:50%;
+    background: var(--gold);
+    box-shadow: 0 0 8px 2px rgba(201,162,75,0.75);
+  }
+  .hotspot:hover .core, .hotspot.active .core{
+    background: var(--muscle-bright);
+    box-shadow: 0 0 12px 3px rgba(214,58,46,0.85);
+  }
+  .hotspot:hover, .hotspot.active{ transform: scale(1.15); }
+  .hotspot.active .ring{ border-color: var(--muscle-bright); }
+  .hotspot:focus-visible{ outline: 2px solid var(--gold); outline-offset: 3px; }
+
+  @keyframes hotspotPulse{
+    0%   { transform: scale(0.55); opacity: 0.9; }
+    70%  { transform: scale(1.9); opacity: 0; }
+    100% { transform: scale(1.9); opacity: 0; }
+  }
+
+  .hotspot-label{
+    position:absolute;
+    top: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--ivory);
+    background: rgba(7,12,22,0.85);
+    border: 1px solid var(--panel-edge);
+    padding: 4px 9px;
+    border-radius: 5px;
+    pointer-events:none;
+    opacity:0;
+    transition: opacity .15s ease;
+  }
+  .hotspot:hover .hotspot-label{ opacity: 1; }
+
+  /* ---------- Detail Panel ---------- */
+  #panel{
+    position: fixed;
+    top: 0;
+    inset-inline-end: 0;
+    height: 100%;
+    width: min(460px, 100%);
+    background: linear-gradient(180deg, var(--panel) 0%, var(--bg-deep) 100%);
+    border-inline-start: 1px solid var(--panel-edge);
+    box-shadow: -30px 0 60px rgba(0,0,0,0.45);
+    z-index: 40;
+    transform: translateX(105%);
+    transition: transform .42s cubic-bezier(.22,.68,0,1);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  body[dir="rtl"] #panel{ transform: translateX(-105%); }
+  #panel.open{ transform: translateX(0); }
+
+  #panel-scroll{
+    overflow-y:auto;
+    padding: 92px 34px 40px;
+    flex:1;
+  }
+  #panel-scroll::-webkit-scrollbar{ width:6px; }
+  #panel-scroll::-webkit-scrollbar-thumb{ background: var(--panel-edge); border-radius: 3px; }
+
+  #panel-close{
+    position:absolute;
+    top: 20px;
+    inset-inline-end: 22px;
+    width: 34px; height:34px;
+    border-radius: 50%;
+    background: rgba(16,26,44,0.9);
+    border: 1px solid var(--panel-edge);
+    color: var(--ivory);
+    font-size: 16px;
+    cursor:pointer;
+    z-index: 5;
+  }
+  #panel-close:hover{ border-color: var(--gold); color: var(--gold); }
+
+  .panel-eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--gold);
+    display:flex; align-items:center; gap:10px;
+    margin-bottom: 10px;
+  }
+  .panel-eyebrow .dot{
+    width:6px; height:6px; border-radius:50%; background:var(--gold);
+  }
+  #panel-title-ar{
+    font-family:'IBM Plex Sans Arabic', sans-serif;
+    font-weight:700;
+    font-size: 26px;
+    line-height:1.25;
+    margin-bottom: 3px;
+  }
+  #panel-title-en{
+    font-family:'Newsreader', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 15px;
+    color: var(--ivory-dim);
+    margin-bottom: 22px;
+  }
+
+  .panel-section{
+    margin-bottom: 26px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--line);
+  }
+  .panel-section:last-child{ border-bottom:none; }
+  .panel-section h3{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--teal-bright);
+    margin-bottom: 10px;
+  }
+  .panel-section p{
+    font-size: 14.5px;
+    line-height: 1.85;
+    color: var(--ivory);
+  }
+  .panel-section p + p{ margin-top:10px; }
+  .panel-section ul{
+    list-style:none;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .panel-section li{
+    font-size: 14px;
+    line-height:1.7;
+    padding-inline-start: 16px;
+    position:relative;
+  }
+  .panel-section li::before{
+    content:'';
+    position:absolute;
+    inset-inline-start:0;
+    top: 9px;
+    width:5px; height:5px;
+    border-radius:1px;
+    background: var(--muscle-bright);
+    transform: rotate(45deg);
+  }
+  .clinical-box{
+    background: rgba(179,35,28,0.08);
+    border: 1px solid rgba(179,35,28,0.35);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .clinical-box h3{ color: var(--muscle-bright); }
+  .clinical-box p{ font-size:13.5px; }
+
+  .stat-row{
+    display:flex; gap: 10px; flex-wrap:wrap;
+    margin-bottom: 22px;
+  }
+  .stat{
+    flex:1; min-width: 110px;
+    background: rgba(201,162,75,0.06);
+    border:1px solid rgba(201,162,75,0.25);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .stat .num{
+    font-family:'Newsreader', serif;
+    font-size: 20px;
+    color: var(--gold);
+    display:block;
+  }
+  .stat .lbl{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    color: var(--ivory-dim);
+    text-transform: uppercase;
+  }
+
+  /* ---------- Intro overlay ---------- */
+  #intro{
+    position:fixed; inset:0; z-index:100;
+    background: var(--bg-deep);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap: 22px;
+    transition: opacity .6s ease, visibility .6s ease;
+  }
+  #intro.hidden{ opacity:0; visibility:hidden; pointer-events:none; }
+  #intro .mark-big{ width:64px; height:64px; opacity:0.9; }
+  #intro .mark-big svg{ width:100%; height:100%; }
+  #intro-status{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ivory-dim);
+  }
+  #intro-bar{
+    width: 220px; height:2px;
+    background: var(--panel-edge);
+    position:relative;
+    overflow:hidden;
+    border-radius:2px;
+  }
+  #intro-bar-fill{
+    position:absolute; inset-inline-start:0; top:0; bottom:0;
+    width:0%;
+    background: var(--muscle-bright);
+    transition: width .3s ease;
+  }
+
+  /* ---------- Legend ---------- */
+  #legend{
+    position: fixed;
+    bottom: 26px;
+    inset-inline-start: 28px;
+    z-index: 20;
+    display:flex;
+    flex-direction:column;
+    gap: 7px;
+  }
+  .legend-item{
+    display:flex; align-items:center; gap: 9px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.03em;
+    color: var(--ivory-dim);
+  }
+  .legend-swatch{
+    width: 10px; height:10px; border-radius:2px;
+  }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 720px){
+    #topbar{ padding: 14px 16px; }
+    .brand h1{ font-size:15px; }
+    .brand .sub{ display:none; }
+    .pill-btn{ padding: 8px 12px; font-size:12px; }
+    #panel{ width:100%; }
+    #panel-scroll{ padding: 84px 22px 36px; }
+    #legend{ display:none; }
+    #stage-caption{ display:none; }
+  }
+
+  [hidden]{ display:none !important; }
+
+  @media (prefers-reduced-motion: reduce){
+    .ring{ animation: none !important; }
+    #ecg-line{ animation: none !important; }
+  }
+</style>
+</head>
+<body dir="rtl">
+
+<!-- Intro loading -->
+<div id="intro">
+  <div class="mark-big">
+    <svg viewBox="0 0 100 100" fill="none">
+      <path d="M50 82 C20 60 5 42 5 26 C5 12 16 3 28 3 C38 3 46 9 50 18 C54 9 62 3 72 3 C84 3 95 12 95 26 C95 42 80 60 50 82 Z" stroke="#c9a24b" stroke-width="2.5"/>
+    </svg>
+  </div>
+  <div id="intro-status" data-ar="جارٍ تحميل النموذج التشريحي..." data-en="Loading anatomical model...">جارٍ تحميل النموذج التشريحي...</div>
+  <div id="intro-bar"><div id="intro-bar-fill"></div></div>
+</div>
+
+<!-- Ambient ECG -->
+<div id="ecg-wrap">
+  <svg viewBox="0 0 1000 46" preserveAspectRatio="none">
+    <g id="ecg-line">
+      <path id="ecg-path" d="M0,23 L60,23 L75,23 L85,6 L95,40 L105,15 L120,23 L180,23 L195,23 L205,6 L215,40 L225,15 L240,23 L300,23
+        M500,23 L560,23 L575,23 L585,6 L595,40 L605,15 L620,23 L680,23 L695,23 L705,6 L715,40 L725,15 L740,23 L800,23"/>
+    </g>
+  </svg>
+</div>
+
+<div id="topbar">
+  <div class="brand">
+    <div class="mark">
+      <svg viewBox="0 0 100 100" fill="none">
+        <path d="M50 82 C20 60 5 42 5 26 C5 12 16 3 28 3 C38 3 46 9 50 18 C54 9 62 3 72 3 C84 3 95 12 95 26 C95 42 80 60 50 82 Z" stroke="#c9a24b" stroke-width="4"/>
+      </svg>
+    </div>
+    <div>
+      <h1 data-ar="أطلس القلب التفاعلي" data-en="Interactive Heart Atlas">أطلس القلب التفاعلي</h1>
+      <div class="sub" data-ar="تشريح ووظيفة — نموذج ثلاثي الأبعاد" data-en="Anatomy & Function — 3D Model">تشريح ووظيفة — نموذج ثلاثي الأبعاد</div>
+    </div>
+  </div>
+  <div id="controls-top">
+    <button class="pill-btn" id="btn-reset" data-ar="إعادة الزاوية" data-en="Reset view">إعادة الزاوية</button>
+    <button class="pill-btn" id="btn-lang">EN</button>
+  </div>
+</div>
+
+<div id="stage"></div>
+
+<div id="hotspot-layer"></div>
+
+<div id="legend">
+  <div class="legend-item"><span class="legend-swatch" style="background:#b3231c"></span><span data-ar="دم غير مؤكسج" data-en="Deoxygenated blood">دم غير مؤكسج</span></div>
+  <div class="legend-item"><span class="legend-swatch" style="background:#3f95a8"></span><span data-ar="دم مؤكسج" data-en="Oxygenated blood">دم مؤكسج</span></div>
+  <div class="legend-item"><span class="legend-swatch" style="background:#c9a24b"></span><span data-ar="نقطة تفاعلية" data-en="Interactive point">نقطة تفاعلية</span></div>
+</div>
+
+<div id="stage-caption">
+  <div class="hint" data-ar="اسحب للتدوير · قرّب بالعجلة · اضغط على النقاط الذهبية" data-en="Drag to rotate · Scroll to zoom · Click gold points">اسحب للتدوير · قرّب بالعجلة · اضغط على النقاط الذهبية</div>
+</div>
+
+<!-- Detail panel -->
+<div id="panel">
+  <button id="panel-close" aria-label="Close">✕</button>
+  <div id="panel-scroll">
+    <div class="panel-eyebrow"><span class="dot"></span><span id="panel-eyebrow-text">MYOCARDIUM · CHAMBER</span></div>
+    <h2 id="panel-title-ar">—</h2>
+    <div id="panel-title-en">—</div>
+    <div class="stat-row" id="panel-stats"></div>
+    <div id="panel-body"></div>
+  </div>
+</div>
+
+<script>
+  window.addEventListener('error', function(e){
+    const s = document.getElementById('intro-status');
+    const b = document.getElementById('intro-bar');
+    if(s){ s.textContent = 'حدث خطأ أثناء تحميل النموذج: ' + (e.message || 'unknown'); }
+    if(b){ b.style.display = 'none'; }
+  });
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* =========================================================
+   CONTENT DATA — bilingual, medically detailed
+   ========================================================= */
+const HEART_DATA = {
+  ra: {
+    eyebrow: { ar: "الحجرة · الجهة اليمنى", en: "CHAMBER · RIGHT SIDE" },
+    title_ar: "الأذين الأيمن",
+    title_en: "Right Atrium",
+    stats: [
+      { num: "2–6", lbl_ar: "ضغط طبيعي (mmHg)", lbl_en: "Normal pressure (mmHg)" },
+      { num: "SA", lbl_ar: "منشأ ضربات القلب", lbl_en: "Pacemaker origin" }
+    ],
+    sections: [
+      {
+        h_ar: "الوصف التشريحي", h_en: "ANATOMICAL DESCRIPTION",
+        p_ar: "الأذين الأيمن حجرة ذات جدار رقيق نسبيًا تستقبل الدم الوريدي غير المؤكسج العائد من الجسم كله عبر ثلاثة أوعية رئيسية: الوريد الأجوف العلوي من الأعلى، والوريد الأجوف السفلي من الأسفل، والجيب التاجي الذي يجمع الدم الوريدي من عضلة القلب نفسها. يتميز جداره الأمامي بعضلات مشطية بارزة (Pectinate muscles)، بينما يكون الجدار الخلفي أملس نسبيًا وينشأ جنينيًا من الجيب الوريدي.",
+        p_ar2: "يوجد داخل الأذين تركيب يسمى الحفرة البيضوية (Fossa ovalis)، وهي أثر متبقٍ من الثقبة البيضوية الجنينية التي كانت تسمح بمرور الدم مباشرة من الأذين الأيمن إلى الأيسر متجاوزة الرئتين غير الفعالة قبل الولادة.",
+        p_en: "The right atrium is a relatively thin-walled chamber receiving deoxygenated venous return from the superior vena cava, inferior vena cava, and coronary sinus. Its anterior wall bears prominent pectinate muscles, while the smooth posterior wall derives embryologically from the sinus venosus. The fossa ovalis marks the remnant of the fetal foramen ovale."
+      },
+      {
+        h_ar: "الوظيفة الفسيولوجية", h_en: "PHYSIOLOGICAL FUNCTION",
+        list_ar: [
+          "تجميع الدم الوريدي القادم من الدورة الجهازية الكبرى والصغرى (عبر الجيب التاجي).",
+          "يحتوي على العقدة الجيبية الأذينية (SA node) في جداره العلوي قرب فوهة الوريد الأجوف العلوي، وهي المنظم الطبيعي لضربات القلب.",
+          "ينقبض بشكل خفيف قبل الانقباض البطيني بأجزاء من الثانية (فترة PR) لدفع آخر 20-30٪ من حجم الدم إلى البطين الأيمن."
+        ],
+        list_en: [
+          "Collects venous blood from the systemic circulation and cardiac venous drainage via the coronary sinus.",
+          "Houses the sinoatrial (SA) node near the superior vena cava opening — the heart's natural pacemaker.",
+          "Contracts just before ventricular systole to deliver the final atrial kick (~20–30% of ventricular filling)."
+        ]
+      },
+      {
+        clinical: true,
+        h_ar: "ملاحظة سريرية", h_en: "CLINICAL NOTE",
+        p_ar: "بقاء الثقبة البيضوية مفتوحة (PFO) بعد الولادة يحدث في نحو 25٪ من البالغين دون أعراض غالبًا، لكنه قد يشكل ممرًا لجلطات وريدية صغيرة (الانصمام المتناقض) مسببة سكتة دماغية في حالات نادرة. تضخم الأذين الأيمن غالبًا علامة على ارتفاع الضغط الرئوي أو قصور الصمام مثلث الشرفات.",
+        p_en: "A patent foramen ovale (PFO) persists in ~25% of adults, usually asymptomatically, but can permit paradoxical embolism. Right atrial enlargement often signals pulmonary hypertension or tricuspid regurgitation."
+      }
+    ]
+  },
+  rv: {
+    eyebrow: { ar: "الحجرة · الجهة اليمنى", en: "CHAMBER · RIGHT SIDE" },
+    title_ar: "البطين الأيمن",
+    title_en: "Right Ventricle",
+    stats: [
+      { num: "15–30", lbl_ar: "ضغط انقباضي (mmHg)", lbl_en: "Systolic pressure (mmHg)" },
+      { num: "~5mm", lbl_ar: "سمك الجدار", lbl_en: "Wall thickness" }
+    ],
+    sections: [
+      {
+        h_ar: "الوصف التشريحي", h_en: "ANATOMICAL DESCRIPTION",
+        p_ar: "البطين الأيمن هو أكثر الحجرات القلبية أمامية، ويقع مباشرة خلف عظم القص تقريبًا. له شكل هرمي مثلث المقطع، وجداره أرق بكثير من البطين الأيسر (نحو 3-5 مم مقابل 8-12 مم) لأنه يضخ الدم إلى الدورة الرئوية منخفضة المقاومة فقط. يحتوي على عضلات حليمية (Papillary muscles) وحبال وترية (Chordae tendineae) تثبّت الصمام مثلث الشرفات، إضافة إلى حزمة عضلية بارزة تسمى الحزام الوسيط (Moderator band) التي تحمل جزءًا من نظام التوصيل الكهربائي.",
+        p_en: "The most anterior cardiac chamber, triangular in cross-section, with a wall roughly a third the thickness of the left ventricle since it only needs to overcome low pulmonary vascular resistance. Contains papillary muscles, chordae tendineae anchoring the tricuspid valve, and the moderator band carrying part of the right bundle branch."
+      },
+      {
+        h_ar: "الوظيفة الفسيولوجية", h_en: "PHYSIOLOGICAL FUNCTION",
+        list_ar: [
+          "يستقبل الدم من الأذين الأيمن عبر الصمام مثلث الشرفات أثناء الانبساط.",
+          "يضخ الدم غير المؤكسج عبر الصمام الرئوي إلى الشريان الرئوي فالرئتين للأكسجة.",
+          "يعمل بنظام ضخ حلزوني/تمعجي أكثر منه انقباضًا متماثلًا، مما يلائم عمله ضد مقاومة منخفضة."
+        ],
+        list_en: [
+          "Receives blood from the right atrium through the tricuspid valve during diastole.",
+          "Ejects deoxygenated blood through the pulmonary valve into the pulmonary artery for gas exchange.",
+          "Contracts with a bellows-like, peristaltic motion suited to pumping against low resistance."
+        ]
+      },
+      {
+        clinical: true,
+        h_ar: "ملاحظة سريرية", h_en: "CLINICAL NOTE",
+        p_ar: "بسبب جداره الرقيق، البطين الأيمن حساس جدًا لزيادة الحمل الضغطي المفاجئة — كما يحدث في الانصمام الرئوي الحاد، حيث قد يفشل بسرعة (قصور القلب الأيمن الحاد). أما الحمل الضغطي المزمن (كما في ارتفاع الضغط الرئوي) فيؤدي إلى تضخمه التدريجي.",
+        p_en: "Because of its thin wall, the RV is highly sensitive to sudden pressure overload — as in acute pulmonary embolism, where acute right heart failure can occur rapidly. Chronic pressure overload (e.g. pulmonary hypertension) instead drives gradual hypertrophy."
+      }
+    ]
+  },
+  la: {
+    eyebrow: { ar: "الحجرة · الجهة اليسرى", en: "CHAMBER · LEFT SIDE" },
+    title_ar: "الأذين الأيسر",
+    title_en: "Left Atrium",
+    stats: [
+      { num: "4", lbl_ar: "أوردة رئوية داخلة", lbl_en: "Pulmonary veins entering" },
+      { num: "4–12", lbl_ar: "ضغط طبيعي (mmHg)", lbl_en: "Normal pressure (mmHg)" }
+    ],
+    sections: [
+      {
+        h_ar: "الوصف التشريحي", h_en: "ANATOMICAL DESCRIPTION",
+        p_ar: "يقع الأذين الأيسر في أقصى خلفية القلب، مباشرة أمام المريء — وهو سبب سماع نبضات القلب بوضوح عبر تخطيط صدى القلب عبر المريء (TEE). يستقبل أربعة أوردة رئوية (اثنان من كل رئة) تحمل الدم المؤكسج حديثًا من الرئتين. له أذين صغير مسمى الأذينة اليسرى (LAA)، وهي كيس عضلي ذو تجعدات كثيرة يُعد أكثر موقع شائع لتكوّن الجلطات الدموية في الرجفان الأذيني.",
+        p_en: "The most posterior cardiac chamber, lying directly anterior to the esophagus. It receives four pulmonary veins carrying newly oxygenated blood. The left atrial appendage (LAA) is a small, highly trabeculated pouch and the most common site of thrombus formation in atrial fibrillation."
+      },
+      {
+        h_ar: "الوظيفة الفسيولوجية", h_en: "PHYSIOLOGICAL FUNCTION",
+        list_ar: [
+          "يستقبل الدم المؤكسج من الرئتين عبر الأوردة الرئوية الأربعة.",
+          "يعمل كخزان (Reservoir) أثناء الانقباض البطيني، وممر (Conduit) أثناء الامتلاء المبكر، ومضخة (Pump) في نهاية الانبساط.",
+          "الأذينة اليسرى تفرز الببتيد الأذيني المدر للصوديوم (ANP) استجابة لزيادة التمدد."
+        ],
+        list_en: [
+          "Receives oxygenated blood from the four pulmonary veins.",
+          "Functions as a reservoir during ventricular systole, a conduit during early filling, and a booster pump in late diastole.",
+          "The atrial wall secretes atrial natriuretic peptide (ANP) in response to stretch."
+        ]
+      },
+      {
+        clinical: true,
+        h_ar: "ملاحظة سريرية", h_en: "CLINICAL NOTE",
+        p_ar: "الرجفان الأذيني يُفقد الأذين الأيسر انقباضه المنسق، مما يبطئ تدفق الدم داخل الأذينة اليسرى ويهيئ لتكوّن الجلطات — وهذا الأساس المنطقي لمضادات التخثر الوقائية في هؤلاء المرضى لتقليل خطر السكتة الدماغية.",
+        p_en: "In atrial fibrillation, loss of coordinated atrial contraction causes blood stasis in the LAA, predisposing to thrombus formation — the rationale for prophylactic anticoagulation to reduce stroke risk."
+      }
+    ]
+  },
+  lv: {
+    eyebrow: { ar: "الحجرة · الجهة اليسرى", en: "CHAMBER · LEFT SIDE" },
+    title_ar: "البطين الأيسر",
+    title_en: "Left Ventricle",
+    stats: [
+      { num: "120", lbl_ar: "ضغط انقباضي (mmHg)", lbl_en: "Systolic pressure (mmHg)" },
+      { num: "8–12mm", lbl_ar: "سمك الجدار", lbl_en: "Wall thickness" },
+      { num: "55–70%", lbl_ar: "الكسر القذفي الطبيعي", lbl_en: "Normal ejection fraction" }
+    ],
+    sections: [
+      {
+        h_ar: "الوصف التشريحي", h_en: "ANATOMICAL DESCRIPTION",
+        p_ar: "البطين الأيسر هو الحجرة الأقوى والأكثر سمكًا في القلب، ذو مقطع دائري تقريبًا يتحمل ضغطًا يعادل ستة أضعاف ضغط البطين الأيمن تقريبًا لأنه يضخ الدم إلى كامل الدورة الجهازية. تُشكّل ألياف عضلته القلبية (Myocardium) نمطًا حلزونيًا معقدًا من طبقات دوامية، مما يمنحه حركة انقباض تشبه 'العصر والالتفاف' (wringing motion) بدلًا من الانضغاط البسيط، فتزيد كفاءة القذف.",
+        p_en: "The most muscular and thickest chamber, roughly circular in cross-section, tolerating pressures roughly six times those of the right ventricle since it drives the entire systemic circulation. Its myocardial fibers form a complex helical, layered arrangement producing a wringing, twisting contraction (LV torsion) rather than simple squeezing, maximizing ejection efficiency."
+      },
+      {
+        h_ar: "الوظيفة الفسيولوجية", h_en: "PHYSIOLOGICAL FUNCTION",
+        list_ar: [
+          "يستقبل الدم المؤكسج من الأذين الأيسر عبر الصمام التاجي (الميترالي).",
+          "يقذف الدم عبر الصمام الأبهري إلى الشريان الأورطي ليصل لكل أعضاء الجسم.",
+          "الكسر القذفي (EF) — نسبة الدم المقذوف من الحجم الكلي في كل نبضة — هو المقياس الأهم لوظيفة الضخ ويُقاس عادة بالإيكو."
+        ],
+        list_en: [
+          "Receives oxygenated blood from the left atrium through the mitral valve.",
+          "Ejects blood through the aortic valve into the aorta, supplying the entire body.",
+          "Ejection fraction (EF) — the percentage of end-diastolic volume ejected per beat — is the key measure of pump function, typically assessed by echocardiography."
+        ]
+      },
+      {
+        clinical: true,
+        h_ar: "ملاحظة سريرية", h_en: "CLINICAL NOTE",
+        p_ar: "قصور القلب مع كسر قذفي منخفض (HFrEF) يعني ضعف قوة الانقباض ذاتها، بينما قصور القلب مع كسر قذفي محفوظ (HFpEF) يعني تصلّب الجدار وضعف الاسترخاء الانبساطي رغم انقباض طبيعي ظاهريًا — وهما كيانان سريريان مختلفان في العلاج والتشخيص.",
+        p_en: "Heart failure with reduced ejection fraction (HFrEF) reflects impaired contractility, whereas heart failure with preserved ejection fraction (HFpEF) reflects diastolic stiffness with grossly preserved systolic function — distinct clinical entities with different management."
+      }
+    ]
+  },
+  mitral: {
+    eyebrow: { ar: "الصمام · قلبي أيسر", en: "VALVE · LEFT HEART" },
+    title_ar: "الصمام التاجي (الميترالي)",
+    title_en: "Mitral Valve",
+    stats: [
+      { num: "4–6", lbl_ar: "المساحة الطبيعية (سم²)", lbl_en: "Normal area (cm²)" },
+      { num: "2", lbl_ar: "عدد الوريقات", lbl_en: "Number of leaflets" }
+    ],
+    sections: [
+      {
+        h_ar: "الوصف التشريحي", h_en: "ANATOMICAL DESCRIPTION",
+        p_ar: "يقع بين الأذين الأيسر والبطين الأيسر، ويتكون من وريقتين فقط (أمامية كبيرة وخلفية أصغر) — بخلاف بقية صمامات القلب ثلاثية الوريقات. تُشد الوريقتان بحبال وترية (Chordae tendineae) متصلة بعضلتين حليميتين (أمامية جانبية وخلفية إنسية) في جدار البطين الأيسر، تمنعان انقلاب الصمام للخلف أثناء الانقباض.",
+        p_en: "Located between the left atrium and left ventricle, uniquely bicuspid (anterior and posterior leaflets) unlike the other three cardiac valves. The leaflets are tethered by chordae tendineae to two papillary muscles (anterolateral and posteromedial) that prevent prolapse during systole."
+      },
+      {
+        h_ar: "الوظيفة الفسيولوجية", h_en: "PHYSIOLOGICAL FUNCTION",
+        list_ar: [
+          "ينفتح أثناء الانبساط ليسمح بامتلاء البطين الأيسر من الأذين الأيسر.",
+          "يُغلَق بإحكام أثناء الانقباض ليمنع رجوع الدم إلى الأذين، بمساعدة تنسيق دقيق بين العضلات الحليمية والحبال الوترية.",
+          "إغلاقه يُنتج الجزء الأول من صوت القلب الأول (S1)."
+        ],
+        list_en: [
+          "Opens during diastole allowing LV filling from the left atrium.",
+          "Closes tightly during systole to prevent regurgitation, aided by precise papillary muscle-chordal coordination.",
+          "Its closure produces the first component of the first heart sound (S1)."
+        ]
+      },
+      {
+        clinical: true,
+        h_ar: "ملاحظة سريرية", h_en: "CLINICAL NOTE",
+        p_ar: "هبوط الصمام التاجي (Mitral valve prolapse) من أكثر أمراض الصمامات شيوعًا، وغالبًا حميد. أما القلس التاجي الشديد أو التضيق (غالبًا نتيجة الحمى الروماتيزمية) فيؤديان لارتفاع ضغط الأذين الأيسر واحتقان رئوي.",
+        p_en: "Mitral valve prolapse is among the most common valvular findings, usually benign. Severe mitral regurgitation or stenosis (often rheumatic in origin) raises left atrial pressure and causes pulmonary congestion."
+      }
+    ]
+  },
+  aortic: {
+    eyebrow: { ar: "الصمام · مخرج البطين الأيسر", en: "VALVE · LV OUTFLOW" },
+    title_ar: "الصمام الأبهري",
+    title_en: "Aortic Valve",
+    stats: [
+      { num: "3–4", lbl_ar: "المساحة الطبيعية (سم²)", lbl_en: "Normal area (cm²)" },
+      { num: "3", lbl_ar: "عدد الوريقات", lbl_en: "Number of cusps" }
+    ],
+    sections: [
+      {
+        h_ar: "الوصف التشريحي", h_en: "ANATOMICAL DESCRIPTION",
+        p_ar: "يفصل بين البطين الأيسر والشريان الأورطي، ويتكون من ثلاث وريقات هلالية (Semilunar cusps) متساوية تقريبًا: يمنى ويسرى وخلفية (غير تاجية). خلف كل وريقة يوجد جيب صغير يسمى جيب فالسالفا (Sinus of Valsalva)، وينطلق الشريانان التاجيان الأيمن والأيسر تحديدًا من الجيبين الأمامي الأيمن والأيسر.",
+        p_en: "Separates the left ventricle from the aorta, formed by three roughly equal semilunar cusps: right, left, and posterior (non-coronary). Behind each cusp lies a sinus of Valsalva; the right and left coronary arteries originate from the corresponding right and left coronary sinuses."
+      },
+      {
+        h_ar: "الوظيفة الفسيولوجية", h_en: "PHYSIOLOGICAL FUNCTION",
+        list_ar: [
+          "ينفتح أثناء الانقباض البطيني للسماح بقذف الدم إلى الأورطي والدورة الجهازية.",
+          "يُغلق بإحكام أثناء الانبساط لمنع ارتداد الدم إلى البطين الأيسر.",
+          "إغلاقه يُنتج الجزء الأول من صوت القلب الثاني (S2)، ويُعد التدفق الارتدادي الطفيف عبره أثناء الإغلاق مصدر تروية الشريانين التاجيين."
+        ],
+        list_en: [
+          "Opens during ventricular systole allowing ejection into the aorta.",
+          "Closes tightly during diastole to prevent regurgitation into the LV.",
+          "Its closure produces the aortic component of the second heart sound (S2); coronary filling actually occurs during diastole via the sinuses of Valsalva."
+        ]
+      },
+      {
+        clinical: true,
+        h_ar: "ملاحظة سريرية", h_en: "CLINICAL NOTE",
+        p_ar: "الصمام الأبهري ثنائي الوريقات (Bicuspid aortic valve) هو أشيع تشوه قلبي خلقي، ويستعجل التضيق الأبهري بعمر أصغر. التضيق الأبهري الشديد المصحوب بأعراض (ذبحة، إغماء، قصور قلب) له إنذار سيئ دون تدخل جراحي أو قسطري (TAVI).",
+        p_en: "Bicuspid aortic valve is the most common congenital cardiac anomaly and accelerates stenosis at a younger age. Symptomatic severe aortic stenosis carries a poor prognosis without valve replacement (surgical or transcatheter TAVI)."
+      }
+    ]
+  },
+  tricuspid: {
+    eyebrow: { ar: "الصمام · قلبي أيمن", en: "VALVE · RIGHT HEART" },
+    title_ar: "الصمام مثلث الشرفات",
+    title_en: "Tricuspid Valve",
+    stats: [
+      { num: "4–6", lbl_ar: "المساحة الطبيعية (سم²)", lbl_en: "Normal area (cm²)" },
+      { num: "3", lbl_ar: "عدد الوريقات", lbl_en: "Number of leaflets" }
+    ],
+    sections: [
+      {
+        h_ar: "الوصف التشريحي", h_en: "ANATOMICAL DESCRIPTION",
+        p_ar: "يقع بين الأذين الأيمن والبطين الأيمن، ويتألف من ثلاث وريقات: أمامية (الأكبر) وخلفية وإنسية (حاجزية). تتصل بحبال وترية بثلاث مجموعات من العضلات الحليمية داخل البطين الأيمن. من الناحية الجراحية، تُستخدم فوهته كمرجع تشريحي لتحديد موقع العقدة الأذينية البطينية (AV node) قرب مثلث كوخ (Triangle of Koch).",
+        p_en: "Situated between the right atrium and right ventricle, comprising three leaflets: anterior (largest), posterior, and septal. Its septal leaflet insertion is used surgically as a landmark near the triangle of Koch to locate the AV node."
+      },
+      {
+        h_ar: "الوظيفة الفسيولوجية", h_en: "PHYSIOLOGICAL FUNCTION",
+        list_ar: [
+          "ينفتح أثناء الانبساط للسماح بامتلاء البطين الأيمن.",
+          "يُغلق أثناء الانقباض لمنع ارتداد الدم إلى الأذين الأيمن.",
+          "يُستخدم قلسه (إن وُجد) سريريًا لتقدير ضغط الشريان الرئوي بشكل غير جراحي عبر تخطيط صدى القلب."
+        ],
+        list_en: [
+          "Opens during diastole allowing RV filling.",
+          "Closes during systole preventing regurgitation into the right atrium.",
+          "Tricuspid regurgitation jet velocity is commonly used to non-invasively estimate pulmonary artery pressure on echocardiography."
+        ]
+      },
+      {
+        clinical: true,
+        h_ar: "ملاحظة سريرية", h_en: "CLINICAL NOTE",
+        p_ar: "القلس مثلث الشرفات الوظيفي شائع الحدوث ثانويًا لتوسع البطين الأيمن الناتج عن ارتفاع الضغط الرئوي أو قصور القلب الأيسر المزمن، وليس بالضرورة نتيجة عيب أولي في الصمام نفسه.",
+        p_en: "Functional tricuspid regurgitation commonly arises secondary to RV dilation from pulmonary hypertension or chronic left heart failure, rather than a primary valvular defect."
+      }
+    ]
+  },
+  pulmonary: {
+    eyebrow: { ar: "الصمام · مخرج البطين الأيمن", en: "VALVE · RV OUTFLOW" },
+    title_ar: "الصمام الرئوي",
+    title_en: "Pulmonary Valve",
+    stats: [
+      { num: "3", lbl_ar: "عدد الوريقات", lbl_en: "Number of cusps" },
+      { num: "8–20", lbl_ar: "ضغط عبوره (mmHg)", lbl_en: "Pressure gradient (mmHg)" }
+    ],
+    sections: [
+      {
+        h_ar: "الوصف التشريحي", h_en: "ANATOMICAL DESCRIPTION",
+        p_ar: "يفصل بين البطين الأيمن والشريان الرئوي، ويتكون من ثلاث وريقات هلالية رقيقة تشبه الأبهري في بنيتها لكن دون جيوب فالسالفا البارزة بنفس الدرجة. يقع في أعلى وأمام القلب تقريبًا، ضمن مخروط الشريان الرئوي (Conus arteriosus/Infundibulum) وهو الجزء الأملس من البطين الأيمن المؤدي إليه.",
+        p_en: "Separates the right ventricle from the pulmonary artery, formed of three thin semilunar cusps structurally similar to the aortic valve but without as prominent sinuses. Positioned at the apex of the RV outflow tract (infundibulum/conus arteriosus)."
+      },
+      {
+        h_ar: "الوظيفة الفسيولوجية", h_en: "PHYSIOLOGICAL FUNCTION",
+        list_ar: [
+          "ينفتح أثناء انقباض البطين الأيمن ليدفع الدم إلى الشريان الرئوي فالرئتين.",
+          "يُغلق أثناء الانبساط لمنع ارتداد الدم إلى البطين الأيمن.",
+          "يعمل تحت ضغوط أقل بكثير من الأبهري نظرًا لانخفاض مقاومة الدورة الرئوية."
+        ],
+        list_en: [
+          "Opens during RV systole to eject blood toward the lungs.",
+          "Closes during diastole preventing regurgitation into the RV.",
+          "Operates under much lower pressures than the aortic valve given low pulmonary vascular resistance."
+        ]
+      },
+      {
+        clinical: true,
+        h_ar: "ملاحظة سريرية", h_en: "CLINICAL NOTE",
+        p_ar: "تضيق الصمام الرئوي الخلقي من أشيع العيوب القلبية الخلقية المعزولة، وغالبًا ما يُصحح بالقسطرة البالونية دون جراحة مفتوحة إذا اكتُشف مبكرًا.",
+        p_en: "Congenital pulmonary valve stenosis is among the most common isolated congenital heart defects, often correctable by balloon valvuloplasty without open surgery when detected early."
+      }
+    ]
+  },
+  aorta: {
+    eyebrow: { ar: "الأوعية الكبرى", en: "GREAT VESSELS" },
+    title_ar: "الشريان الأورطي (الأبهر)",
+    title_en: "Aorta",
+    stats: [
+      { num: "2.5–3.5", lbl_ar: "القطر الطبيعي (سم)", lbl_en: "Normal diameter (cm)" }
+    ],
+    sections: [
+      {
+        h_ar: "الوصف التشريحي", h_en: "ANATOMICAL DESCRIPTION",
+        p_ar: "أكبر شريان في الجسم، ينشأ من البطين الأيسر ويُقسم تشريحيًا إلى: الأبهر الصاعد (يحمل منشأ الشريانين التاجيين)، ثم القوس الأبهري (تنشأ منه ثلاثة فروع رئيسية للرأس والذراعين)، ثم الأبهر النازل الصدري فالبطني حتى تفرعه لشريانين حرقفيين مشتركين عند مستوى الفقرة القطنية الرابعة تقريبًا.",
+        p_en: "The largest artery in the body, arising from the LV and divided into: ascending aorta (giving rise to the coronary arteries), the aortic arch (giving off three major branches to head and arms), then the descending thoracic and abdominal aorta, bifurcating into the common iliac arteries near L4."
+      },
+      {
+        h_ar: "الوظيفة الفسيولوجية", h_en: "PHYSIOLOGICAL FUNCTION",
+        list_ar: [
+          "يحمل الدم المؤكسج من القلب إلى كل شرايين الجسم الجهازية.",
+          "جداره المرن الغني بالألياف المرنة (Windkessel effect) يمتص موجة الضغط الانقباضية ويحولها لتدفق أكثر انتظامًا.",
+          "يحوي مستقبلات ضغط (Baroreceptors) في قوسه تساهم في تنظيم ضغط الدم اللحظي."
+        ],
+        list_en: [
+          "Carries oxygenated blood from the heart to the entire systemic arterial circulation.",
+          "Its elastin-rich wall provides the Windkessel effect, cushioning systolic pressure into steadier flow.",
+          "Baroreceptors in the arch contribute to beat-to-beat blood pressure regulation."
+        ]
+      },
+      {
+        clinical: true,
+        h_ar: "ملاحظة سريرية", h_en: "CLINICAL NOTE",
+        p_ar: "تمدد الأبهر الصدري أو تسلخه (Aortic dissection) من الطوارئ القلبية الوعائية الأشد خطورة، ويرتبط غالبًا بارتفاع الضغط المزمن أو أمراض النسيج الضام مثل متلازمة مارفان.",
+        p_en: "Thoracic aortic aneurysm and dissection are among the most life-threatening cardiovascular emergencies, often linked to chronic hypertension or connective tissue disorders such as Marfan syndrome."
+      }
+    ]
+  },
+  pa: {
+    eyebrow: { ar: "الأوعية الكبرى", en: "GREAT VESSELS" },
+    title_ar: "الشريان الرئوي",
+    title_en: "Pulmonary Artery",
+    stats: [
+      { num: "8–20", lbl_ar: "الضغط الطبيعي (mmHg)", lbl_en: "Normal pressure (mmHg)" }
+    ],
+    sections: [
+      {
+        h_ar: "الوصف التشريحي", h_en: "ANATOMICAL DESCRIPTION",
+        p_ar: "الشريان الوحيد في الجسم الذي يحمل دمًا غير مؤكسج. ينشأ من البطين الأيمن كجذع رئوي واحد (Main pulmonary artery) ثم ينقسم سريعًا إلى فرعين، أيمن وأيسر، متجهين إلى الرئتين. يقع فوق الصمام الأبهري وأمامه مباشرة في وضعه التشريحي الطبيعي.",
+        p_en: "The only artery in the body carrying deoxygenated blood. Arises from the RV as a single main pulmonary artery, then divides into right and left branches to the lungs, lying just anterior and superior to the aortic valve in normal anatomy."
+      },
+      {
+        h_ar: "الوظيفة الفسيولوجية", h_en: "PHYSIOLOGICAL FUNCTION",
+        list_ar: [
+          "ينقل الدم غير المؤكسج من البطين الأيمن إلى الشعيرات الدموية الرئوية لتبادل الغازات.",
+          "يعمل ضمن دورة منخفضة الضغط والمقاومة مقارنة بالدورة الجهازية.",
+          "في الجنين، يتصل بالأبهر عبر القناة الشريانية (Ductus arteriosus) التي تُغلق طبيعيًا خلال الأيام الأولى بعد الولادة."
+        ],
+        list_en: [
+          "Transports deoxygenated blood from the RV to pulmonary capillaries for gas exchange.",
+          "Operates within a low-pressure, low-resistance circuit compared to the systemic circulation.",
+          "In the fetus, connects to the aorta via the ductus arteriosus, which normally closes within the first days of life."
+        ]
+      },
+      {
+        clinical: true,
+        h_ar: "ملاحظة سريرية", h_en: "CLINICAL NOTE",
+        p_ar: "الانصمام الرئوي الحاد (Pulmonary embolism) — غالبًا من جلطة وريدية عميقة بالساق — يسد الشريان الرئوي أو فروعه فجأة، مسببًا ارتفاع ضغط حاد بالبطين الأيمن وقد يؤدي لصدمة قلبية مفاجئة.",
+        p_en: "Acute pulmonary embolism — often from deep venous thrombosis — suddenly obstructs the pulmonary artery or its branches, causing acute RV pressure overload and potentially cardiogenic shock."
+      }
+    ]
+  },
+  septum: {
+    eyebrow: { ar: "البنية الفاصلة", en: "SEPTAL STRUCTURE" },
+    title_ar: "الحاجز البطيني",
+    title_en: "Interventricular Septum",
+    stats: [
+      { num: "8–11mm", lbl_ar: "السمك الطبيعي", lbl_en: "Normal thickness" }
+    ],
+    sections: [
+      {
+        h_ar: "الوصف التشريحي", h_en: "ANATOMICAL DESCRIPTION",
+        p_ar: "الجدار العضلي السميك الفاصل بين البطينين الأيمن والأيسر، يتكون من جزء عضلي كبير سفلي وجزء غشائي صغير رقيق علوي (الأكثر شيوعًا كموقع للعيوب الخلقية). ينحني نحو البطين الأيمن بشكل طبيعي بسبب الضغط الأعلى في البطين الأيسر، مما يعطي البطين الأيسر مقطعه الدائري والأيمن مقطعه الهلالي.",
+        p_en: "The thick muscular wall separating the two ventricles, composed of a large muscular portion and a small, thin membranous portion superiorly (the most common site of congenital ventricular septal defects). It normally bows toward the RV due to higher LV pressure, giving the LV its circular cross-section."
+      },
+      {
+        h_ar: "الوظيفة الفسيولوجية", h_en: "PHYSIOLOGICAL FUNCTION",
+        list_ar: [
+          "يفصل الدورتين الرئوية والجهازية فيزيائيًا، مانعًا اختلاط الدم المؤكسج وغير المؤكسج.",
+          "يحمل جزءًا رئيسيًا من نظام التوصيل الكهربائي (حزمة هيس وفروعها)، لذا فهو حرج وظيفيًا لتزامن انقباض البطينين.",
+          "يساهم انحناؤه الديناميكي أثناء دورة القلب في كفاءة ضخ كلا البطينين (Ventricular interdependence)."
+        ],
+        list_en: [
+          "Physically separates the pulmonary and systemic circulations, preventing mixing of oxygenated and deoxygenated blood.",
+          "Carries the bundle of His and its branches, making it functionally critical for synchronized biventricular contraction.",
+          "Its dynamic curvature throughout the cardiac cycle contributes to ventricular interdependence and pump efficiency."
+        ]
+      },
+      {
+        clinical: true,
+        h_ar: "ملاحظة سريرية", h_en: "CLINICAL NOTE",
+        p_ar: "عيب الحاجز البطيني (VSD) هو أشيع عيب قلبي خلقي عند الولادة، وغالبًا ما يكون في الجزء الغشائي. العيوب الصغيرة قد تُغلق تلقائيًا، بينما الكبيرة قد تسبب تحويلة يسار-يمين كبيرة وقصور قلب مبكر إن لم تُصحح.",
+        p_en: "Ventricular septal defect (VSD) is the most common congenital heart defect at birth, typically membranous. Small defects may close spontaneously, while large ones can cause significant left-to-right shunting and early heart failure if uncorrected."
+      }
+    ]
+  },
+  coronary: {
+    eyebrow: { ar: "الشرايين التاجية", en: "CORONARY CIRCULATION" },
+    title_ar: "الشرايين التاجية",
+    title_en: "Coronary Arteries",
+    stats: [
+      { num: "2", lbl_ar: "الشرايين الرئيسية", lbl_en: "Main arteries" },
+      { num: "~5%", lbl_ar: "من النتاج القلبي", lbl_en: "Of cardiac output" }
+    ],
+    sections: [
+      {
+        h_ar: "الوصف التشريحي", h_en: "ANATOMICAL DESCRIPTION",
+        p_ar: "تنشأ من جيبي فالسالفا الأيمن والأيسر خلف وريقات الصمام الأبهري مباشرة. الشريان التاجي الأيسر الرئيسي (LM) ينقسم سريعًا إلى الشريان الأمامي النازل (LAD) الذي يروي الجدار الأمامي والحاجز، والشريان المنعطف (LCx) الذي يروي الجدار الجانبي والخلفي. الشريان التاجي الأيمن (RCA) يروي البطين الأيمن غالبًا، وفي معظم الناس (يمين السيادة) يعطي أيضًا الشريان النازل الخلفي (PDA).",
+        p_en: "Originate from the right and left sinuses of Valsalva just behind the aortic valve cusps. The left main (LM) rapidly divides into the left anterior descending (LAD), supplying the anterior wall and septum, and the left circumflex (LCx), supplying the lateral and posterior walls. The right coronary artery (RCA) mainly supplies the RV and, in most people (right-dominant circulation), gives rise to the posterior descending artery (PDA)."
+      },
+      {
+        h_ar: "الوظيفة الفسيولوجية", h_en: "PHYSIOLOGICAL FUNCTION",
+        list_ar: [
+          "توفر التروية الدموية والأكسجين الحصري لعضلة القلب نفسها.",
+          "على عكس أغلب شرايين الجسم، يحدث معظم تدفقها الدموي خلال الانبساط لا الانقباض، بسبب ضغط عضلة القلب المرتفع أثناء الانقباض الذي يضغط عليها.",
+          "شبكة من الأوردة التاجية تجمع الدم مجددًا وتصبّه في الجيب التاجي داخل الأذين الأيمن."
+        ],
+        list_en: [
+          "Provide the exclusive blood and oxygen supply to the myocardium itself.",
+          "Unlike most systemic arteries, the majority of coronary flow occurs during diastole rather than systole, since ventricular contraction compresses intramural vessels.",
+          "A network of cardiac veins drains blood back into the coronary sinus, emptying into the right atrium."
+        ]
+      },
+      {
+        clinical: true,
+        h_ar: "ملاحظة سريرية", h_en: "CLINICAL NOTE",
+        p_ar: "انسداد أحد الشرايين التاجية بجلطة على لويحة تصلب عصيدي غير مستقرة هو الآلية الأساسية لاحتشاء عضلة القلب الحاد (النوبة القلبية). موقع الانسداد يحدد المنطقة المتضررة: انسداد LAD القريب ('الشريان القاتل') يهدد جزءًا كبيرًا من عضلة البطين الأيسر.",
+        p_en: "Occlusion of a coronary artery by thrombus on an unstable atherosclerotic plaque is the core mechanism of acute myocardial infarction. The occlusion site determines the territory at risk: proximal LAD occlusion (the 'widow-maker') threatens a large portion of LV myocardium."
+      }
+    ]
+  },
+  apex: {
+    eyebrow: { ar: "المعلم التشريحي", en: "ANATOMICAL LANDMARK" },
+    title_ar: "قمة القلب",
+    title_en: "Apex of the Heart",
+    stats: [
+      { num: "ICS5", lbl_ar: "المسافة الوربية المقابلة", lbl_en: "Corresponding intercostal space" }
+    ],
+    sections: [
+      {
+        h_ar: "الوصف التشريحي", h_en: "ANATOMICAL DESCRIPTION",
+        p_ar: "الطرف السفلي الحاد للقلب، يتكون بالكامل تقريبًا من عضلة البطين الأيسر، ويتجه بشكل طبيعي نحو الأسفل والأمام واليسار. يقع تشريحيًا عند المسافة الوربية الخامسة على خط منتصف الترقوة تقريبًا، وهو الموقع القياسي لسماع 'النبض القمي' (Apex beat/PMI) بالفحص السريري.",
+        p_en: "The sharp inferior tip of the heart, formed almost entirely by left ventricular myocardium, normally directed downward, forward, and to the left. It corresponds surface-anatomically to roughly the 5th intercostal space at the midclavicular line — the standard site for palpating the apex beat (point of maximal impulse) on physical exam."
+      },
+      {
+        h_ar: "الوظيفة الفسيولوجية", h_en: "PHYSIOLOGICAL FUNCTION",
+        list_ar: [
+          "نقطة التقاء الحركة الالتوائية (Torsion/twist) لعضلة القلب أثناء الانقباض، حيث تدور القمة بعكس اتجاه القاعدة.",
+          "يُستخدم موقعها وقوة نبضها سريريًا كمؤشر غير مباشر على حجم البطين الأيسر ووظيفته."
+        ],
+        list_en: [
+          "The focal point of LV torsional (twisting) motion during systole, where the apex rotates opposite to the base.",
+          "Its location and impulse strength are used clinically as an indirect marker of LV size and function."
+        ]
+      },
+      {
+        clinical: true,
+        h_ar: "ملاحظة سريرية", h_en: "CLINICAL NOTE",
+        p_ar: "انزياح النبض القمي نحو الأسفل واليسار خارج موقعه الطبيعي يوحي بتضخم أو توسع البطين الأيسر. متلازمة تاكوتسوبو ('قلب الإناء الياباني') تصيب عادة القمة تحديدًا مسببة ضعفًا انقباضيًا موضعيًا شديد الشبه بالنوبة القلبية سريريًا لكن دون انسداد شرياني.",
+        p_en: "Displacement of the apex beat downward and laterally suggests LV enlargement or dilation. Takotsubo cardiomyopathy ('broken heart syndrome') classically affects the apex, causing regional systolic dysfunction that clinically mimics infarction without coronary occlusion."
+      }
+    ]
+  }
+};
+
+/* Marker layout: normalized 3D anchor points relative to the heart mesh group (local space, before world transform), used to compute screen position each frame */
+const MARKERS = [
+  { id:'ra',        pos:[ 1.05,  0.55,  0.55] },
+  { id:'rv',         pos:[ 0.75, -0.55,  0.85] },
+  { id:'la',         pos:[-0.35,  0.85, -0.75] },
+  { id:'lv',         pos:[-0.55, -0.35,  0.35] },
+  { id:'mitral',     pos:[-0.25,  0.15,  0.05] },
+  { id:'aortic',     pos:[ 0.05,  0.95,  0.05] },
+  { id:'tricuspid',  pos:[ 0.55,  0.15,  0.35] },
+  { id:'pulmonary',  pos:[ 0.15,  1.15, -0.35] },
+  { id:'aorta',      pos:[ 0.15,  1.85,  0.15] },
+  { id:'pa',         pos:[-0.25,  1.55, -0.55] },
+  { id:'septum',     pos:[ 0.15, -0.15,  0.75] },
+  { id:'coronary',   pos:[-0.15,  0.55,  0.95] },
+  { id:'apex',       pos:[-0.15, -1.55,  0.05] }
+];
+
+let currentLang = 'ar';
+
+/* =========================================================
+   THREE.JS SCENE
+   ========================================================= */
+const stage = document.getElementById('stage');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1220);
+scene.fog = new THREE.FogExp2(0x0b1220, 0.045);
+
+const camera = new THREE.PerspectiveCamera(38, window.innerWidth/window.innerHeight, 0.1, 100);
+camera.position.set(0, 0.4, 9.5);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 5.5;
+controls.maxDistance = 15;
+controls.target.set(0, -0.1, 0);
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.55;
+
+// Lighting — clinical, dramatic, warm key + cool rim
+const keyLight = new THREE.DirectionalLight(0xfff1de, 2.4);
+keyLight.position.set(4, 6, 6);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(1024,1024);
+scene.add(keyLight);
+
+const rimLight = new THREE.DirectionalLight(0x3f95a8, 1.3);
+rimLight.position.set(-5, 2, -4);
+scene.add(rimLight);
+
+const fillLight = new THREE.DirectionalLight(0xb3231c, 0.5);
+fillLight.position.set(-2, -3, 4);
+scene.add(fillLight);
+
+const ambient = new THREE.AmbientLight(0x1c2a44, 0.9);
+scene.add(ambient);
+
+// subtle ground/glow disc
+const glowGeo = new THREE.CircleGeometry(6, 64);
+const glowMat = new THREE.MeshBasicMaterial({ color:0x1c0d0d, transparent:true, opacity:0.35 });
+const glow = new THREE.Mesh(glowGeo, glowMat);
+glow.rotation.x = -Math.PI/2;
+glow.position.y = -2.6;
+scene.add(glow);
+
+/* ---------- Build a procedural anatomical heart ---------- */
+const heartGroup = new THREE.Group();
+scene.add(heartGroup);
+
+const muscleMat = new THREE.MeshPhysicalMaterial({
+  color: 0x9c2a24,
+  roughness: 0.42,
+  clearcoat: 0.55,
+  clearcoatRoughness: 0.35,
+  sheen: 1.0,
+  sheenColor: new THREE.Color(0xd6534a),
+  metalness: 0.05
+});
+const veinMat = new THREE.MeshPhysicalMaterial({
+  color: 0x2c5a68,
+  roughness: 0.4,
+  clearcoat: 0.5,
+  metalness: 0.05
+});
+const arteryMat = new THREE.MeshPhysicalMaterial({
+  color: 0xb3453f,
+  roughness: 0.38,
+  clearcoat: 0.6,
+  metalness: 0.05
+});
+const goldAccent = new THREE.MeshStandardMaterial({ color:0xc9a24b, roughness:0.35, metalness:0.6 });
+
+// Main ventricular mass — lathe profile approximating heart silhouette (apex at bottom)
+function makeHeartLathe(){
+  const pts = [];
+  // (radius, y) pairs from apex (bottom) to base (top)
+  const profile = [
+    [0.02, -1.65],
+    [0.28, -1.35],
+    [0.55, -1.0],
+    [0.78, -0.55],
+    [0.92, -0.1],
+    [1.0,  0.35],
+    [0.98, 0.75],
+    [0.86, 1.05],
+    [0.62, 1.22],
+    [0.35, 1.28],
+    [0.15, 1.25]
+  ];
+  profile.forEach(p => pts.push(new THREE.Vector2(p[0], p[1])));
+  const geo = new THREE.LatheGeometry(pts, 64);
+  geo.computeVertexNormals();
+  return geo;
+}
+const coreMesh = new THREE.Mesh(makeHeartLathe(), muscleMat);
+coreMesh.scale.set(1.15, 1.0, 0.92);
+coreMesh.castShadow = true;
+coreMesh.receiveShadow = true;
+heartGroup.add(coreMesh);
+
+// Interventricular groove hint (subtle displaced strip) via a thin torus-like arc
+const grooveGeo = new THREE.TorusGeometry(0.98, 0.02, 8, 40, Math.PI*0.9);
+const grooveMat = new THREE.MeshStandardMaterial({ color:0x6e1a17, roughness:0.6 });
+const groove = new THREE.Mesh(grooveGeo, grooveMat);
+groove.position.set(0.1, -0.1, 0.3);
+groove.rotation.set(Math.PI/2.3, 0.3, 0.5);
+heartGroup.add(groove);
+
+// Left atrium bulge (posterior-superior-left)
+const laGeo = new THREE.SphereGeometry(0.62, 32, 32);
+const laMesh = new THREE.Mesh(laGeo, muscleMat);
+laMesh.position.set(-0.35, 0.95, -0.65);
+laMesh.scale.set(1.0, 0.85, 0.95);
+laMesh.castShadow = true;
+heartGroup.add(laMesh);
+
+// Right atrium bulge (anterior-superior-right)
+const raGeo = new THREE.SphereGeometry(0.68, 32, 32);
+const raMesh = new THREE.Mesh(raGeo, muscleMat);
+raMesh.position.set(0.85, 0.65, 0.4);
+raMesh.scale.set(1.05, 0.9, 1.0);
+raMesh.castShadow = true;
+heartGroup.add(raMesh);
+
+// Aorta (arching tube, rightward-up from base then curving left)
+function makeTube(pointsArr, radius, mat, segments=40, radial=16){
+  const curve = new THREE.CatmullRomCurve3(pointsArr.map(p=>new THREE.Vector3(...p)));
+  const geo = new THREE.TubeGeometry(curve, segments, radius, radial, false);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true;
+  return mesh;
+}
+const aortaMesh = makeTube([
+  [0.05, 1.15, 0.05],
+  [0.1, 1.55, 0.05],
+  [0.2, 1.9, -0.05],
+  [0.05, 2.05, -0.35],
+  [-0.35, 1.95, -0.55],
+  [-0.7, 1.65, -0.55]
+], 0.22, arteryMat, 32, 16);
+heartGroup.add(aortaMesh);
+
+// Pulmonary artery (shorter tube, left-forward)
+const paMesh = makeTube([
+  [0.05, 1.05, -0.15],
+  [-0.05, 1.35, -0.35],
+  [-0.3, 1.55, -0.55],
+  [-0.6, 1.55, -0.65]
+], 0.19, veinMat, 24, 16);
+heartGroup.add(paMesh);
+
+// Superior vena cava
+const svcMesh = makeTube([
+  [0.9, 0.95, 0.35],
+  [0.95, 1.5, 0.3],
+  [0.85, 1.95, 0.2]
+], 0.16, veinMat, 20, 14);
+heartGroup.add(svcMesh);
+
+// Inferior vena cava (short stub going down-back)
+const ivcMesh = makeTube([
+  [0.95, 0.15, 0.45],
+  [1.0, -0.35, 0.35],
+  [0.9, -0.7, 0.25]
+], 0.17, veinMat, 20, 14);
+heartGroup.add(ivcMesh);
+
+// Pulmonary veins (four small stubs into LA)
+const pvPositions = [
+  [-0.85, 1.15, -0.9],[-0.15,1.35,-1.0],[-0.85,0.65,-0.85],[-0.15,0.75,-1.05]
+];
+pvPositions.forEach((p,i)=>{
+  const m = makeTube([
+    [p[0]*0.55, p[1]*0.55+0.3, p[2]*0.55],
+    p
+  ], 0.09, veinMat, 10, 10);
+  heartGroup.add(m);
+});
+
+// Coronary artery hint — thin curved line across anterior surface (LAD)
+const ladCurvePts = [
+  [0.1, 1.0, 0.85],
+  [0.0, 0.4, 0.95],
+  [-0.05, -0.3, 0.9],
+  [-0.1, -1.1, 0.55]
+];
+const ladMesh = makeTube(ladCurvePts, 0.045, goldAccent, 30, 8);
+heartGroup.add(ladMesh);
+
+heartGroup.rotation.y = -0.35;
+heartGroup.position.y = -0.15;
+
+/* =========================================================
+   HOTSPOTS — projected from local marker positions
+   ========================================================= */
+const hotspotLayer = document.getElementById('hotspot-layer');
+const hotspotEls = {};
+
+MARKERS.forEach(m => {
+  const el = document.createElement('button');
+  el.className = 'hotspot';
+  el.setAttribute('aria-label', HEART_DATA[m.id].title_ar);
+  el.dataset.id = m.id;
+  el.innerHTML = `<span class="ring"></span><span class="core"></span><span class="hotspot-label">${HEART_DATA[m.id].title_ar}</span>`;
+  el.addEventListener('click', () => openPanel(m.id));
+  hotspotLayer.appendChild(el);
+  hotspotEls[m.id] = el;
+});
+
+const _v = new THREE.Vector3();
+function updateHotspots(){
+  MARKERS.forEach(m => {
+    _v.set(m.pos[0], m.pos[1], m.pos[2]);
+    heartGroup.localToWorld(_v);
+    const behind = isBehindCamera(_v);
+    _v.project(camera);
+    const x = (_v.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-_v.y * 0.5 + 0.5) * window.innerHeight;
+    const el = hotspotEls[m.id];
+    if(behind || _v.z > 1){
+      el.style.display = 'none';
+    } else {
+      el.style.display = 'flex';
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+    }
+  });
+}
+function isBehindCamera(worldPos){
+  const camDir = new THREE.Vector3();
+  camera.getWorldDirection(camDir);
+  const toPoint = worldPos.clone().sub(camera.position);
+  return toPoint.dot(camDir) < 0;
+}
+
+/* =========================================================
+   PANEL
+   ========================================================= */
+const panel = document.getElementById('panel');
+const panelClose = document.getElementById('panel-close');
+let activeId = null;
+
+function renderPanel(id){
+  const d = HEART_DATA[id];
+  document.getElementById('panel-eyebrow-text').textContent = currentLang === 'ar' ? d.eyebrow.ar : d.eyebrow.en;
+  document.getElementById('panel-title-ar').textContent = currentLang === 'ar' ? d.title_ar : d.title_en;
+  document.getElementById('panel-title-en').textContent = currentLang === 'ar' ? d.title_en : d.title_ar;
+
+  const statsWrap = document.getElementById('panel-stats');
+  statsWrap.innerHTML = '';
+  d.stats.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'stat';
+    div.innerHTML = `<span class="num">${s.num}</span><span class="lbl">${currentLang==='ar' ? s.lbl_ar : s.lbl_en}</span>`;
+    statsWrap.appendChild(div);
+  });
+
+  const body = document.getElementById('panel-body');
+  body.innerHTML = '';
+  d.sections.forEach(sec => {
+    const div = document.createElement('div');
+    div.className = 'panel-section' + (sec.clinical ? ' clinical-box' : '');
+    let html = `<h3>${currentLang==='ar' ? sec.h_ar : sec.h_en}</h3>`;
+    if(sec.p_ar || sec.p_en){
+      html += `<p>${currentLang==='ar' ? sec.p_ar : sec.p_en}</p>`;
+    }
+    if(sec.p_ar2){
+      html += `<p>${currentLang==='ar' ? sec.p_ar2 : ''}</p>`;
+    }
+    if(sec.list_ar || sec.list_en){
+      const items = currentLang==='ar' ? sec.list_ar : sec.list_en;
+      html += '<ul>' + items.map(it => `<li>${it}</li>`).join('') + '</ul>';
+    }
+    div.innerHTML = html;
+    body.appendChild(div);
+  });
+}
+
+function openPanel(id){
+  activeId = id;
+  Object.values(hotspotEls).forEach(el => el.classList.remove('active'));
+  hotspotEls[id].classList.add('active');
+  renderPanel(id);
+  panel.classList.add('open');
+  controls.autoRotate = false;
+}
+function closePanel(){
+  panel.classList.remove('open');
+  if(activeId) hotspotEls[activeId].classList.remove('active');
+  activeId = null;
+}
+panelClose.addEventListener('click', closePanel);
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closePanel(); });
+
+/* =========================================================
+   LANGUAGE TOGGLE
+   ========================================================= */
+const btnLang = document.getElementById('btn-lang');
+function applyLang(lang){
+  currentLang = lang;
+  document.body.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  document.documentElement.lang = lang;
+  btnLang.textContent = lang === 'ar' ? 'EN' : 'AR';
+  document.querySelectorAll('[data-ar]').forEach(el => {
+    el.textContent = lang === 'ar' ? el.dataset.ar : el.dataset.en;
+  });
+  Object.entries(HEART_DATA).forEach(([id, d]) => {
+    const labelEl = hotspotEls[id].querySelector('.hotspot-label');
+    labelEl.textContent = lang === 'ar' ? d.title_ar : d.title_en;
+    hotspotEls[id].setAttribute('aria-label', lang === 'ar' ? d.title_ar : d.title_en);
+  });
+  if(activeId) renderPanel(activeId);
+}
+btnLang.addEventListener('click', () => applyLang(currentLang === 'ar' ? 'en' : 'ar'));
+
+/* ---------- Reset view ---------- */
+document.getElementById('btn-reset').addEventListener('click', () => {
+  camera.position.set(0, 0.4, 9.5);
+  controls.target.set(0, -0.1, 0);
+  controls.autoRotate = true;
+});
+controls.addEventListener('start', () => { controls.autoRotate = false; });
+
+/* =========================================================
+   RESIZE + RENDER LOOP
+   ========================================================= */
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+let firstFrameRendered = false;
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  // gentle ambient heartbeat scale pulse on the whole mesh
+  const t = performance.now() / 1000;
+  heartGroup.scale.setScalar(1 + Math.sin(t*1.35)*0.008);
+  updateHotspots();
+  renderer.render(scene, camera);
+  if(!firstFrameRendered){
+    firstFrameRendered = true;
+    hideIntro();
+  }
+}
+
+/* =========================================================
+   INTRO / LOADING SEQUENCE — reflects the real render loop,
+   not a fake timer, so it can never hang while secretly ready.
+   ========================================================= */
+const introEl = document.getElementById('intro');
+const introBarFill = document.getElementById('intro-bar-fill');
+let progress = 0;
+const introTimer = setInterval(() => {
+  progress = Math.min(progress + Math.random()*18 + 8, 92);
+  introBarFill.style.width = progress + '%';
+}, 160);
+
+function hideIntro(){
+  clearInterval(introTimer);
+  introBarFill.style.width = '100%';
+  setTimeout(() => introEl.classList.add('hidden'), 220);
+}
+
+// Safety net: if something silently prevents the first frame from
+// ever rendering, surface a message instead of hanging forever.
+setTimeout(() => {
+  if(!firstFrameRendered){
+    document.getElementById('intro-status').textContent = 'التحميل يستغرق وقتًا أطول من المعتاد — تأكدي من الاتصال بالإنترنت.';
+  }
+}, 8000);
+
+animate();
+</script>
+</body>
+</html>
